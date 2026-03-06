@@ -3,7 +3,7 @@ module.exports = async (req, res) => {
     "https://rootplans.com",
     "https://www.rootplans.com",
     "https://tamiclark-lgtm.github.io"
-  ]);
+]);
 
   const origin = req.headers.origin || "";
 
