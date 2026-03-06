@@ -4,7 +4,7 @@ module.exports = async (req, res) => {
     "https://www.rootplans.com",
     "https://tamiclark-lgtm.github.io"
 ]);
-
+ 
   const origin = req.headers.origin || "";
 
   if (allowedOrigins.has(origin)) {
