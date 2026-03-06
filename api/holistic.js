@@ -1,23 +1,51 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
+  const allowedOrigins = new Set([
+    "https://rootplans.com",
+    "https://www.rootplans.com",
+    "https://tamiclark-lgtm.github.io"
+  ]);
+
+  const origin = req.headers.origin || "";
+
+  if (allowedOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "POST") {
     return res.status(405).send("Method not allowed");
   }
 
   try {
+    const body = req.body || {};
+    const prompt = body.prompt;
 
-    const { prompt } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: "Missing ANTHROPIC_API_KEY in Vercel" });
+    }
+
+    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
+        "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
         model: "claude-3-5-sonnet-latest",
         max_tokens: 2000,
+        temperature: 0.7,
         messages: [
           {
             role: "user",
@@ -27,17 +55,27 @@ export default async function handler(req, res) {
       })
     });
 
-    const data = await response.json();
+    const rawText = await anthropicRes.text();
 
-    const text = data.content
-      ?.filter(x => x.type === "text")
-      ?.map(x => x.text)
-      ?.join("\n") || "No response";
+    if (!anthropicRes.ok) {
+      return res.status(500).send(`Anthropic error: ${rawText}`);
+    }
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return res.status(500).send("Anthropic returned invalid JSON");
+    }
+
+    const text = (data.content || [])
+      .filter(block => block.type === "text")
+      .map(block => block.text)
+      .join("\n")
+      .trim();
 
     return res.status(200).json({ text });
-
   } catch (error) {
-    console.error(error);
-    return res.status(500).send("Proxy error");
+    return res.status(500).send(`Proxy error: ${error.message}`);
   }
-}
+};
